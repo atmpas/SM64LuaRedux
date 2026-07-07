@@ -13,22 +13,23 @@ local DATA_START_PTR = nil
 local DATA_MAX_SIZE = nil
 
 local STATE_BLOCKS <const> = {
-	{ addr = 0x80207700, size = 0x200 },	-- gSaveBuffer
-	{ addr = 0x8032D5D4, size = 4 },		-- gGlobalTimer
-	{ addr = 0x8032DD34, size = 2 },		-- sSwimStrength
-	{ addr = 0x8032DD80, size = 0x18 },		-- save_file.o
-	{ addr = 0x8032DDF4, size = 2 },		-- gCurrSaveFileNum
-	{ addr = 0x8032DF38, size = 4 },		-- gCurrLevelArea
-	{ addr = 0x80330F3C, size = 4 },		-- gPaintingMarioYEntry
-	{ addr = 0x80331370, size = 0x368 },	-- ingame_menu.o
-	{ addr = 0x80332614, size = 2 },		-- sPrevCheckMarioRoom
-	{ addr = 0x8033B170, size = 0xC8 },		-- gMarioStates[0]
-	{ addr = 0x8033B260, size = 0x0E },		-- gHudDisplay
-	{ addr = 0x8033B3B0, size = 0x24 },		-- gBodyStates[0]
-	{ addr = 0x8033C61E, size = 2 },		-- sAvoidYawVel
-	{ addr = 0x8033C684, size = 2 },		-- sSelectionFlags
-	{ addr = 0x80361258, size = 2 },		-- gTTCSpeedSetting
-	{ addr = 0x8038EEE0, size = 2 },		-- gRandomSeed16
+	--         us          jp          sh          eu
+	{ addr = { 0x80207700, 0x80207B00, 0x80203F00, 0x80202F00 }, size = 0x200 }, -- gSaveBuffer
+	{ addr = { 0x8032D5D4, 0x8032C694, 0x8030CD04, 0x802F9784 }, size = 4 },     -- gGlobalTimer
+	{ addr = { 0x8032DD34, 0x8032CDD4, 0x8030D464, 0x802F9F04 }, size = 2 },     -- sSwimStrength
+	{ addr = { 0x8032DD80, 0x8032CE20, 0x8030D4B0, 0x802F9F50 }, size = 0x18 },  -- save_file.o
+	{ addr = { 0x8032DDF4, 0x8032CE94, 0x8030D524, 0x802F9FC4 }, size = 2 },     -- gCurrSaveFileNum
+	{ addr = { 0x8032DF38, 0x8032CFD8, 0x8030D668, 0x802FA118 }, size = 4 },     -- gCurrLevelArea
+	{ addr = { 0x80330F3C, 0x8032FFDC, 0x8031066C, 0x802FD0FC }, size = 4 },     -- gPaintingMarioYEntry
+	{ addr = { 0x80331370, 0x80330410, 0x80310AA0, 0x802FD530 }, size = { 0x368, 0x1C0, 0x1C4, 0x670 } }, -- ingame_menu.o
+	{ addr = { 0x80332614, 0x80331504, 0x80311B94, 0x802FEBC4 }, size = 2 },     -- sPrevCheckMarioRoom
+	{ addr = { 0x8033B170, 0x80339E00, 0x8031D9C0, 0x80309430 }, size = 0xC8 },  -- gMarioStates[0]
+	{ addr = { 0x8033B260, 0x80339EF0, 0x8031DA88, 0x803094F8 }, size = 0x0E },  -- gHudDisplay
+	{ addr = { 0x8033B3B0, 0x8033A040, 0x8031DBA0, 0x80309610 }, size = 0x24 },  -- gBodyStates[0]
+	{ addr = { 0x8033C61E, 0x8033B2AE, 0x8031EF32, 0x8030A9A2 }, size = 2 },     -- sAvoidYawVel
+	{ addr = { 0x8033C684, 0x8033B314, 0x8031F1AC, 0x8030AC1C }, size = 2 },     -- sSelectionFlags
+	{ addr = { 0x80361258, 0x8035FEE8, 0x80343418, 0x8032EE88 }, size = 2 },     -- gTTCSpeedSetting
+	{ addr = { 0x8038EEE0, 0x8038EEE0, 0x8038BBC0, 0x80389C60 }, size = 2 },     -- gRandomSeed16
 }
 
 local START_STATE = {}
@@ -46,8 +47,24 @@ local ADDR_BLOCK_SIZE <const> = 8
 local INPUT_SIZE <const> = 12
 
 
-local function check_ver_us()
-	return (memory.readdword(0x80322B24) == 0x8FA6001C)
+local function get_state_blocks()
+	local idx = Settings.address_source_index
+	local blocks = {}
+	for i = 1, #STATE_BLOCKS do
+		local addr = STATE_BLOCKS[i].addr[idx]
+		if addr ~= nil then
+			local size = STATE_BLOCKS[i].size
+			if type(size) == "table" then
+				size = size[idx]
+			end
+			table.insert(blocks, { addr = addr, size = size })
+		end
+	end
+	return blocks
+end
+
+local function is_playback_supported()
+	return #get_state_blocks() > 0
 end
 
 
@@ -511,7 +528,8 @@ end
 
 
 local function get_cam_yaw()
-	local mario_area = memory.readdword(0x8033B200)
+	local addr = Addresses[Settings.address_source_index]
+	local mario_area = memory.readdword(addr.mario_states + 0x90)
 	if (mario_area == 0) then
 		return 0
 	end
@@ -523,26 +541,28 @@ local function get_cam_yaw()
 end
 
 local function update_prev_frame_vars()
+	local addr = Addresses[Settings.address_source_index]
 	PREV_FRAME_VARS = {
-		global_timer = memory.readdword(0x8032D5D4),
+		global_timer = memory.readdword(addr.global_timer),
 		cam_yaw = get_cam_yaw(),
-		cam_movement_flags = memory.readwordsigned(0x8033C848),
-		cam_selection_flags = memory.readwordsigned(0x8033C684),
-		random_seed = memory.readword(0x8038EEE0)
+		cam_movement_flags = memory.readwordsigned(addr.cam_movement_flags),
+		cam_selection_flags = memory.readwordsigned(addr.cam_selection_flags),
+		random_seed = memory.readword(addr.rng_value)
 	}
 end
 
 local function add_recording_frame()
-	local global_timer = memory.readdword(0x8032D5D4)
+	local addr = Addresses[Settings.address_source_index]
+	local global_timer = memory.readdword(addr.global_timer)
 	if ((PREV_FRAME_VARS.global_timer ~= -1) and (global_timer ~= (PREV_FRAME_VARS.global_timer + 1))) then
 		RECORDING_ERROR_MSG = "Global timer inconsistent"
 		Playback.cancel_recording()
 	end
 
 	local input = {
-		x = memory.readbytesigned(0x8033AFFA),
-		y = memory.readbytesigned(0x8033AFFB),
-		b = memory.readword(0x8033AFF8),
+		x = memory.readbytesigned(addr.controller_pads + 2),
+		y = memory.readbytesigned(addr.controller_pads + 3),
+		b = memory.readword(addr.controller_pads + 0),
 		cam_yaw = PREV_FRAME_VARS.cam_yaw,
 		cam_movement_flags = PREV_FRAME_VARS.cam_movement_flags,
 		cam_selection_flags = PREV_FRAME_VARS.cam_selection_flags,
@@ -573,21 +593,23 @@ local function read_memory_block(addr, size)
 end
 
 local function update_start_state()
+	local addr = Addresses[Settings.address_source_index]
 	local load_params = {
-		warp_type = memory.readbyte(0x8033B248),
-		warp_level_num = memory.readbyte(0x8033B249),
-		warp_area_idx = memory.readbyte(0x8033B24A),
-		warp_node_id = memory.readbyte(0x8033B24B),
-		warp_arg = memory.readdword(0x8033B24C),
-		warp_act_num = memory.readwordsigned(0x8033BAC8),
-		warp_trans_red = memory.readbyte(0x8032DDE8),
-		warp_trans_green = memory.readbyte(0x8032DDEC),
-		warp_trans_blue = memory.readbyte(0x8032DDF0)
+		warp_type = memory.readbyte(addr.warp_dest + 0),
+		warp_level_num = memory.readbyte(addr.warp_dest + 1),
+		warp_area_idx = memory.readbyte(addr.warp_dest + 2),
+		warp_node_id = memory.readbyte(addr.warp_dest + 3),
+		warp_arg = memory.readdword(addr.warp_dest + 4),
+		warp_act_num = memory.readwordsigned(addr.warp_act_num),
+		warp_trans_red = memory.readbyte(addr.warp_trans_red),
+		warp_trans_green = memory.readbyte(addr.warp_trans_green),
+		warp_trans_blue = memory.readbyte(addr.warp_trans_blue)
 	}
 
+	local state_blocks = get_state_blocks()
 	local state_data = ""
-	for i=1,#STATE_BLOCKS do
-		local addr_block = STATE_BLOCKS[i]
+	for i=1,#state_blocks do
+		local addr_block = state_blocks[i]
 		state_data = state_data .. read_memory_block(addr_block.addr, addr_block.size)
 	end
 
@@ -600,7 +622,7 @@ end
 local function check_recording_start()
 	if (START_STATE.level_load_params ~= nil) then
 		local warp_type = START_STATE.level_load_params.warp_type
-		local warp_dest_type = memory.readbyte(0x8033B248)
+		local warp_dest_type = memory.readbyte(Addresses[Settings.address_source_index].warp_dest)
 		if ((warp_type ~= 0) and (warp_dest_type == 0)) then -- level or area warp
 			RECORDING_FROM_LEVEL_WARP = (warp_type == 1)
 			Playback.recorded_start_state = true
@@ -614,8 +636,8 @@ end
 
 function Playback.at_input()
 	if Playback.is_recording then
-		if not check_ver_us() then
-			RECORDING_ERROR_MSG = "Not on US ROM"
+		if not is_playback_supported() then
+			RECORDING_ERROR_MSG = "Playback not supported for this version"
 			Playback.cancel_recording()
 			return
 		end
@@ -631,8 +653,8 @@ end
 
 
 function Playback.start_recording()
-	if not check_ver_us() then
-		RECORDING_ERROR_MSG = "Not on US ROM"
+	if not is_playback_supported() then
+		RECORDING_ERROR_MSG = "Playback not supported for this version"
 		return
 	end
 	RECORDING_ERROR_MSG = nil
@@ -668,11 +690,12 @@ function Playback.stop_recording()
 	end
 	recording_name = unique_recording_name(recording_name)
 
+	local state_blocks = get_state_blocks()
 	local recording = {
-		mem_blocks_length = #STATE_BLOCKS,
+		mem_blocks_length = #state_blocks,
 		length = recording_length,
 		level_load_params = START_STATE.level_load_params,
-		addr_blocks = STATE_BLOCKS,
+		addr_blocks = state_blocks,
 		state_data = START_STATE.state_data,
 		inputs = RECORDING_INPUTS,
 		name = recording_name
