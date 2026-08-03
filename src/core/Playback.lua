@@ -19,6 +19,7 @@ local STATE_BLOCKS <const> = {
 	{ addr = { 0x8032DD34, 0x8032CDD4, 0x8030D464, 0x802F9F04 }, size = 2 },     -- sSwimStrength
 	{ addr = { 0x8032DD80, 0x8032CE20, 0x8030D4B0, 0x802F9F50 }, size = 0x18 },  -- save_file.o
 	{ addr = { 0x8032DDF4, 0x8032CE94, 0x8030D524, 0x802F9FC4 }, size = 2 },     -- gCurrSaveFileNum
+	{ addr = { 0x8032DF08, 0x8032CFA8, 0x8030D638, 0x802FA0E8 }, size = 2 },     -- gAreaUpdateCounter
 	{ addr = { 0x8032DF38, 0x8032CFD8, 0x8030D668, 0x802FA118 }, size = 4 },     -- gCurrLevelArea
 	{ addr = { 0x80330F3C, 0x8032FFDC, 0x8031066C, 0x802FD0FC }, size = 4 },     -- gPaintingMarioYEntry
 	{ addr = { 0x80331370, 0x80330410, 0x80310AA0, 0x802FD530 }, size = { 0x368, 0x1C0, 0x1C4, 0x670 } }, -- ingame_menu.o
